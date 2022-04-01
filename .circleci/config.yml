@@ -86,10 +86,13 @@ jobs:
       - run:
           name: diagnostics
           command: |
-            C:\msys64\usr\bin\bash.exe -c "/usr/bin/cat /proc/version"
+            C:\Ruby27-x64\msys64\usr\bin\bash.exe -c "/usr/bin/cat /proc/version"
             perl --version
             ruby --version
             gem --version
+            rm .\ruby-setup.exe
+      
+      - checkout
 
       - run:
           name: build
