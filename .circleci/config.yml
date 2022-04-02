@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  win: circleci/windows@2.2.0
+  win: circleci/windows@4.1
 
 jobs:
   test_linux:
@@ -61,7 +61,7 @@ jobs:
         type: string
 
     executor:
-      name: win/default
+      name: win/server-2022
       shell: powershell.exe
 
     environment:
