@@ -65,7 +65,7 @@ jobs:
       shell: powershell.exe
 
     environment:
-      PATH: "C:\\Ruby27-x64\\bin;%PATH%"
+      PATH: "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;%PATH%"
       RAKEOPT: "-rdevkit"
       TESTOPTS: '-v'
       MAKE: "make V=1 -j2"
@@ -73,11 +73,10 @@ jobs:
     steps:
       - run:
           name: install ruby
-          no_output_timeout: 20m
           command: |
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
-            Invoke-WebRequest -UseBasicParsing -uri "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-2.7.5-1/rubyinstaller-devkit-2.7.5-1-x64.exe" -OutFile ruby-setup.exe;
-            .\ruby-setup.exe /VERYSILENT /NORESTART;
+            Invoke-WebRequest -UseBasicParsing -uri "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-<< parameters.ruby_version >>/rubyinstaller-devkit-<< parameters.ruby_version >>-x64.exe" -OutFile ruby-setup.exe;
+            .\ruby-setup.exe /VERYSILENT /NORESTART /DIR=C:/Ruby<< parameters.ruby_version >>-x64;
 
       - run:
           name: configure msys2
@@ -86,7 +85,7 @@ jobs:
       - run:
           name: diagnostics
           command: |
-            C:\Ruby27-x64\msys64\usr\bin\bash.exe -c "/usr/bin/cat /proc/version"
+            C:/Ruby<< parameters.ruby_version >>/msys64/usr/bin/bash.exe -c "/usr/bin/cat /proc/version"
             perl --version
             ruby --version
             gem --version
@@ -94,11 +93,28 @@ jobs:
       
       - checkout
 
+      - restore_cache:
+          name: restore gem cache
+          keys:
+            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
+            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-
+            - v1-bundle-<< parameters.ruby_version >>-
+
+      - run:
+          name: install dependencies
+          command: |
+            bundle install
+
+      - save_cache:
+          name: save gem cache
+          paths:
+            - ./vendor/bundle
+          key: v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
+
       - run:
           name: build
           no_output_timeout: 30m
           command: |
-            bundle install
             bundle exec rake ports
 
       # - run:
@@ -127,5 +143,5 @@ workflows:
           matrix:
             parameters:
               ruby_version:
-                # - '2.5.3'
-                - '2.7'
+                - '2.6.8-1'
+                - '2.7.5-1'
