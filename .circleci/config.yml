@@ -65,31 +65,37 @@ jobs:
       shell: powershell.exe
 
     environment:
-      PATH: "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;%PATH%"
       RAKEOPT: "-rdevkit"
       TESTOPTS: '-v'
       MAKE: "make V=1 -j2"
 
     steps:
       - run:
-          name: install ruby
+          name: remove pre-installed ruby
+          command: |
+            Get-ChildItem -path 'C:\tools\' -filter Ruby* | Remove-Item -Force -Recurse
+
+      - run:
+          name: install ruby devkit
           command: |
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
             Invoke-WebRequest -UseBasicParsing -uri "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-<< parameters.ruby_version >>/rubyinstaller-devkit-<< parameters.ruby_version >>-x64.exe" -OutFile ruby-setup.exe;
             .\ruby-setup.exe /VERYSILENT /NORESTART /DIR=C:/Ruby<< parameters.ruby_version >>-x64;
 
       - run:
-          name: configure msys2
-          command: ridk install 1 ;
-
-      - run:
-          name: diagnostics
+          name: ruby diagnostics
           command: |
-            C:/Ruby<< parameters.ruby_version >>/msys64/usr/bin/bash.exe -c "/usr/bin/cat /proc/version"
+            $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
             perl --version
             ruby --version
             gem --version
             rm .\ruby-setup.exe
+
+      - run:
+          name: configure msys2
+          command: |
+            $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
+            ridk install 1 ;
       
       - checkout
 
@@ -103,6 +109,7 @@ jobs:
       - run:
           name: install dependencies
           command: |
+            $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
             bundle install
 
       - save_cache:
@@ -115,6 +122,7 @@ jobs:
           name: build
           no_output_timeout: 30m
           command: |
+            $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
             bundle exec rake ports
 
       # - run:
