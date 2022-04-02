@@ -92,11 +92,12 @@ jobs:
             rm .\ruby-setup.exe
 
       - run:
-          name: configure msys2
+          name: update build env (for ruby 2.5)
           command: |
             $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
-            ridk install 1 ;
-      
+            ridk install 2 ;
+            gem install bundler
+
       - checkout
 
       - restore_cache:
@@ -151,5 +152,6 @@ workflows:
           matrix:
             parameters:
               ruby_version:
+                - '2.5.9-1'
                 - '2.6.8-1'
                 - '2.7.5-1'
