@@ -10,49 +10,69 @@ jobs:
         description: "version tag for the veracross/circleci-ruby-freetds container"
         type: string
 
+    # Primary container image where all commands run
     docker:
-      - image: veracross/circleci-ruby-freetds:latest
-      - image: metaskills/mssql-server-linux-tinytds:2017-GA
+      - image: cimg/ruby:2.7.0
+        environment:
+          TESTOPTS: "-v"
+          TINYTDS_UNIT_DATASERVER: sqlserver
+          TINYTDS_UNIT_HOST: sqlserver
+          SA_PASSWORD: super01S3cUr3
+          TOXIPROXY_HOST: toxiproxy
+
+      # Service container image
+      - image: mcr.microsoft.com/mssql/server:2017-GA-ubuntu
+        name: sqlserver
+        environment:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: super01S3cUr3
+
+      - image: shopify/toxiproxy:2.1.4
+        name: toxiproxy
 
     working_directory: ~/repo
 
     steps:
       - checkout
 
-      - restore_cache:
-          name: restore gem cache
-          keys:
-            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
-            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-
-            - v1-bundle-<< parameters.ruby_version >>-
+      - run:
+          name: setup sql
+          command: |
+            curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+            curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+            sudo apt-get update
+            sudo ACCEPT_EULA=Y apt-get -y install mssql-tools unixodbc-dev
+            /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P $SA_PASSWORD -i ./test/sql/db-create.sql
+            /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P $SA_PASSWORD -i ./test/sql/db-login.sql
 
       - run:
           name: install dependencies
           command: |
-            bundle check --path ./vendor/bundle || bundle install --jobs=3 --retry=3 --path vendor/bundle
-            bundle clean
+            sudo ./test/bin/install-openssl.sh
+            sudo ./test/bin/install-freetds.sh
 
-      - save_cache:
-          name: save gem cache
-          paths:
-            - ./vendor/bundle
-          key: v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
+      # - restore_cache:
+      #     name: restore gem cache
+      #     keys:
+      #       - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
+      #       - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-
+      #       - v1-bundle-<< parameters.ruby_version >>-
+
+      - run:
+          name: bundle install
+          command: |
+            bundle install
+
+      # - save_cache:
+      #     name: save gem cache
+      #     paths:
+      #       - ./vendor/bundle
+      #     key: v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
 
       - run:
           name: build gem
           command: |
-            bundle exec rake build
-
-      - run:
-          # imported from setup.sh, although we should do better...
-          name: wait for database
-          command: |
-            sleep 10
-
-      - run:
-          name: run tests
-          command: |
-            TINYTDS_UNIT_HOST=localhost bundle exec rake test
+            bundle exec rake
 
   test_windows:
     parameters:
@@ -140,18 +160,18 @@ jobs:
 workflows:
   test_supported_ruby_versions:
     jobs:
-      # - test_linux:
-      #     matrix:
-      #       parameters:
-      #         ruby_version:
-      #           - '2.5.3'
-      #           - '2.7'
-
-
-      - test_windows:
+      - test_linux:
           matrix:
             parameters:
               ruby_version:
-                - '2.5.9-1'
-                - '2.6.8-1'
-                - '2.7.5-1'
+      #           - '2.5.3'
+                - '2.7'
+
+
+      # - test_windows:
+      #     matrix:
+      #       parameters:
+      #         ruby_version:
+              #  - '2.5.9-1'
+              #  - '2.6.8-1'
+              #  - '2.7.5-1'

@@ -256,6 +256,9 @@ module TinyTds
       # docker-compose.yml handles this automatically for us. In instances where someone is using their own local mssql container they'll
       # need to set up the networks manually and set TINYTDS_UNIT_HOST to their mssql container name
       # For anything other than localhost just use the environment config
+      toxi_host = ENV['TOXIPROXY_HOST'] || 'localhost'
+      Toxiproxy.host = "http://#{toxi_host}:8474"
+
       env_host = ENV['TINYTDS_UNIT_HOST_TEST'] || ENV['TINYTDS_UNIT_HOST'] || 'localhost'
       host = ['localhost', '127.0.0.1', '0.0.0.0'].include?(env_host) ? 'sqlserver' : env_host
       port = ENV['TINYTDS_UNIT_PORT'] || 1433
