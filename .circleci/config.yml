@@ -171,14 +171,12 @@ workflows:
               ruby_version:
                 - '2.5.9'
                 - '2.6.10'
-                - '2.7.0'
                 - '2.7.6'
 
-
-      # - test_windows:
-      #     matrix:
-      #       parameters:
-      #         ruby_version:
-              #  - '2.5.9-1'
-              #  - '2.6.10-1'
-              #  - '2.7.6-1'
+      - test_windows:
+          matrix:
+            parameters:
+              ruby_version:
+               - '2.5.9-1'
+               - '2.6.10-1'
+               - '2.7.6-1'
