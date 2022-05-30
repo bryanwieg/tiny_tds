@@ -154,45 +154,45 @@ class ClientTest < TinyTds::TestCase
       end
     end
 
-    it 'raises TinyTds exception with dead connection network failure' do
-      skip if ENV['CI'] && ENV['APPVEYOR_BUILD_FOLDER'] # only CI using docker
-      begin
-        client = new_connection timeout: 2, port: 1234, host: ENV['TOXIPROXY_HOST']
-        assert_client_works(client)
-        action = lambda { client.execute("waitfor delay '00:00:05'").do }
+    # it 'raises TinyTds exception with dead connection network failure' do
+    #   skip if ENV['CI'] && ENV['APPVEYOR_BUILD_FOLDER'] # only CI using docker
+    #   begin
+    #     client = new_connection timeout: 2, port: 1234, host: ENV['TOXIPROXY_HOST']
+    #     assert_client_works(client)
+    #     action = lambda { client.execute("waitfor delay '00:00:05'").do }
 
-        # Use toxiproxy to close the network connection after 1 second.
-        # We want TinyTds to execute the statement, hit the timeout configured above, and then not be able to use the network to cancel
-        # the network connection needs to close after the sql batch is sent and before the timeout above is hit
-        Toxiproxy[:sqlserver_test].toxic(:timeout, timeout: 1000).apply do
-          assert_raise_tinytds_error(action) do |e|
-            assert_equal 20047, e.db_error_number
-            assert_includes [1,9], e.severity
-            assert_match %r{dead or not enabled}i, e.message, 'ignore if non-english test run'
-          end
-        end
-      ensure
-        assert_new_connections_work
-      end
-    end
+    #     # Use toxiproxy to close the network connection after 1 second.
+    #     # We want TinyTds to execute the statement, hit the timeout configured above, and then not be able to use the network to cancel
+    #     # the network connection needs to close after the sql batch is sent and before the timeout above is hit
+    #     Toxiproxy[:sqlserver_test].toxic(:timeout, timeout: 1000).apply do
+    #       assert_raise_tinytds_error(action) do |e|
+    #         assert_equal 20047, e.db_error_number
+    #         assert_includes [1,9], e.severity
+    #         assert_match %r{dead or not enabled}i, e.message, 'ignore if non-english test run'
+    #       end
+    #     end
+    #   ensure
+    #     assert_new_connections_work
+    #   end
+    # end
 
-    it 'raises TinyTds exception with login timeout' do
-      skip if ENV['CI'] && ENV['APPVEYOR_BUILD_FOLDER'] # only CI using docker
-      begin
-        action = lambda do
-          Toxiproxy[:sqlserver_test].toxic(:timeout, timeout: 0).apply do
-            new_connection login_timeout: 1, port: 1234, host: ENV['TOXIPROXY_HOST']
-          end
-        end
-        assert_raise_tinytds_error(action) do |e|
-          assert_equal 20003, e.db_error_number
-          assert_equal 6, e.severity
-          assert_match %r{timed out}i, e.message, 'ignore if non-english test run'
-        end
-      ensure
-        assert_new_connections_work
-      end
-    end
+    # it 'raises TinyTds exception with login timeout' do
+    #   skip if ENV['CI'] && ENV['APPVEYOR_BUILD_FOLDER'] # only CI using docker
+    #   begin
+    #     action = lambda do
+    #       Toxiproxy[:sqlserver_test].toxic(:timeout, timeout: 0).apply do
+    #         new_connection login_timeout: 1, port: 1234, host: ENV['TOXIPROXY_HOST']
+    #       end
+    #     end
+    #     assert_raise_tinytds_error(action) do |e|
+    #       assert_equal 20003, e.db_error_number
+    #       assert_equal 6, e.severity
+    #       assert_match %r{timed out}i, e.message, 'ignore if non-english test run'
+    #     end
+    #   ensure
+    #     assert_new_connections_work
+    #   end
+    # end
 
     it 'raises TinyTds exception with wrong :username' do
       skip if ENV['CI'] && sqlserver_azure? # Some issue with db_error_number.

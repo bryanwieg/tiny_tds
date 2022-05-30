@@ -12,7 +12,7 @@ jobs:
 
     # Primary container image where all commands run
     docker:
-      - image: cimg/ruby:2.7.0
+      - image: cimg/ruby:<< parameters.ruby_version >>
         environment:
           TESTOPTS: "-v"
           TINYTDS_UNIT_DATASERVER: sqlserver
@@ -21,7 +21,7 @@ jobs:
           TOXIPROXY_HOST: toxiproxy
 
       # Service container image
-      - image: mcr.microsoft.com/mssql/server:2017-GA-ubuntu
+      - image: mcr.microsoft.com/mssql/server:2019-CU16-ubuntu-20.04
         name: sqlserver
         environment:
           ACCEPT_EULA: Y
@@ -51,28 +51,33 @@ jobs:
             sudo ./test/bin/install-openssl.sh
             sudo ./test/bin/install-freetds.sh
 
-      # - restore_cache:
-      #     name: restore gem cache
-      #     keys:
-      #       - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
-      #       - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-
-      #       - v1-bundle-<< parameters.ruby_version >>-
+      - restore_cache:
+          name: restore gem cache
+          keys:
+            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
+            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-
+            - v1-bundle-<< parameters.ruby_version >>-
 
       - run:
           name: bundle install
           command: |
             bundle install
 
-      # - save_cache:
-      #     name: save gem cache
-      #     paths:
-      #       - ./vendor/bundle
-      #     key: v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
+      - save_cache:
+          name: save gem cache
+          paths:
+            - ./vendor/bundle
+          key: v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
 
       - run:
           name: build gem
           command: |
-            bundle exec rake
+            bundle exec rake build
+
+      - run:
+          name: test gem
+          command: |
+            bundle exec rake test
 
   test_windows:
     parameters:
@@ -164,8 +169,10 @@ workflows:
           matrix:
             parameters:
               ruby_version:
-      #           - '2.5.3'
-                - '2.7'
+                - '2.5.9'
+                - '2.6.10'
+                - '2.7.0'
+                - '2.7.6'
 
 
       # - test_windows:
@@ -173,5 +180,5 @@ workflows:
       #       parameters:
       #         ruby_version:
               #  - '2.5.9-1'
-              #  - '2.6.8-1'
-              #  - '2.7.5-1'
+              #  - '2.6.10-1'
+              #  - '2.7.6-1'
