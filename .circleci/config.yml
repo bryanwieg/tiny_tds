@@ -7,27 +7,30 @@ jobs:
   test_linux:
     parameters:
       ruby_version:
-        description: "version tag for the veracross/circleci-ruby-freetds container"
+        description: 'version tag for the cimg/ruby container'
         type: string
 
-    # Primary container image where all commands run
     docker:
+      # Primary container image where all commands run
       - image: cimg/ruby:<< parameters.ruby_version >>
         environment:
-          TESTOPTS: "-v"
+          TESTOPTS: '-v'
           TINYTDS_UNIT_DATASERVER: sqlserver
           TINYTDS_UNIT_HOST: sqlserver
           SA_PASSWORD: super01S3cUr3
           TOXIPROXY_HOST: toxiproxy
 
       # Service container image
-      - image: mcr.microsoft.com/mssql/server:2019-CU16-ubuntu-20.04
+      - image: mcr.microsoft.com/mssql/server:2019-latest
         name: sqlserver
         environment:
           ACCEPT_EULA: Y
           SA_PASSWORD: super01S3cUr3
 
-      - image: shopify/toxiproxy:2.1.4
+      # tests based on toxiproxy are broken, last working on
+      # v2.1.4 (2019). This is pinned to the closest older
+      # version until those tests can be fixed
+      - image: ghcr.io/shopify/toxiproxy:2.1.5
         name: toxiproxy
 
     working_directory: ~/repo
@@ -36,19 +39,27 @@ jobs:
       - checkout
 
       - run:
-          name: setup sql
+          name: install sql prereqs
           command: |
             curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
             curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
             sudo apt-get update
             sudo ACCEPT_EULA=Y apt-get -y install mssql-tools unixodbc-dev
+
+      - run:
+          name: setup tiny_tds test database
+          command: |
             /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P $SA_PASSWORD -i ./test/sql/db-create.sql
             /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P $SA_PASSWORD -i ./test/sql/db-login.sql
 
       - run:
-          name: install dependencies
+          name: compile openssl library
           command: |
             sudo ./test/bin/install-openssl.sh
+
+      - run:
+          name: compile freetds library
+          command: |
             sudo ./test/bin/install-freetds.sh
 
       - restore_cache:
@@ -59,7 +70,7 @@ jobs:
             - v1-bundle-<< parameters.ruby_version >>-
 
       - run:
-          name: bundle install
+          name: bundle install gems
           command: |
             bundle install
 
@@ -82,7 +93,7 @@ jobs:
   test_windows:
     parameters:
       ruby_version:
-        description: "version tag for the veracross/circleci-ruby-freetds container"
+        description: 'version tag for rubydev environment'
         type: string
 
     executor:
@@ -90,9 +101,9 @@ jobs:
       shell: powershell.exe
 
     environment:
-      RAKEOPT: "-rdevkit"
+      RAKEOPT: '-rdevkit'
       TESTOPTS: '-v'
-      MAKE: "make V=1 -j2"
+      MAKE: 'make V=1 -j2'
 
     steps:
       - run:
@@ -101,26 +112,36 @@ jobs:
             Get-ChildItem -path 'C:\tools\' -filter Ruby* | Remove-Item -Force -Recurse
 
       - run:
-          name: install ruby devkit
+          name: download and install ruby devkit
           command: |
+            $uri = 'https://api.github.com/repos/oneclick/rubyinstaller2/tags?per_page=200'
+            $releases = ((Invoke-WebRequest $uri) | ConvertFrom-Json).name | select-string -Pattern '<< parameters.ruby_version >>'
+            $target_release = (($releases | Sort-Object -Descending)[0] | Out-String).Trim()
+            $target_version = $target_release.Substring($target_release.Length - 7)
+            $download_uri = "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-$target_version/rubyinstaller-devkit-$target_version-x64.exe"
+            echo "Ruby Target Version Found: $target_version"
+
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
-            Invoke-WebRequest -UseBasicParsing -uri "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-<< parameters.ruby_version >>/rubyinstaller-devkit-<< parameters.ruby_version >>-x64.exe" -OutFile ruby-setup.exe;
+            Invoke-WebRequest -UseBasicParsing -uri $download_uri -OutFile ruby-setup.exe;
             .\ruby-setup.exe /VERYSILENT /NORESTART /DIR=C:/Ruby<< parameters.ruby_version >>-x64;
 
       - run:
           name: ruby diagnostics
           command: |
             $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
+            echo "Perl Version:"
             perl --version
+            echo "Ruby Version:"
             ruby --version
+            echo "Gem Version:"
             gem --version
             rm .\ruby-setup.exe
 
       - run:
-          name: update build env (for ruby 2.5)
+          name: update build env
           command: |
             $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
-            ridk install 2 ;
+            ridk install 2
             gem install bundler
 
       - checkout
@@ -133,7 +154,7 @@ jobs:
             - v1-bundle-<< parameters.ruby_version >>-
 
       - run:
-          name: install dependencies
+          name: bundle install gems
           command: |
             $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
             bundle install
@@ -145,22 +166,32 @@ jobs:
           key: v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
 
       - run:
-          name: build
+          name: build openssl
+          no_output_timeout: 30m
+          command: |
+            $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
+            bundle exec rake ports:openssl
+
+      - run:
+          name: build libiconv
+          no_output_timeout: 30m
+          command: |
+            $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
+            bundle exec rake ports:libiconv
+
+      - run:
+          name: build freetds
+          no_output_timeout: 30m
+          command: |
+            $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
+            bundle exec rake ports:freetds
+
+      - run:
+          name: build gem
           no_output_timeout: 30m
           command: |
             $Env:PATH = "C:\\Ruby<< parameters.ruby_version >>-x64\\bin;$Env:PATH"
             bundle exec rake ports
-
-      # - run:
-      #     # imported from setup.sh, although we should do better...
-      #     name: wait for database
-      #     command: |
-      #       sleep 10
-
-      # - run:
-      #     name: run tests
-      #     command: |
-      #       TINYTDS_UNIT_HOST=localhost bundle exec rake test
 
 workflows:
   test_supported_ruby_versions:
@@ -169,14 +200,14 @@ workflows:
           matrix:
             parameters:
               ruby_version:
-                - '2.5.9'
-                - '2.6.10'
-                - '2.7.6'
+                - '2.5'
+                - '2.6'
+                - '2.7'
 
       - test_windows:
           matrix:
             parameters:
               ruby_version:
-               - '2.5.9-1'
-               - '2.6.10-1'
-               - '2.7.6-1'
+               - '2.5'
+               - '2.6'
+               - '2.7'
