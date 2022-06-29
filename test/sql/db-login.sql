@@ -3,7 +3,10 @@
 PRINT 'RUNNING DB-LOGIN.SQL';
 
 PRINT 'CREATING TINYTDS TEST LOGIN';
-CREATE LOGIN [tinytds] WITH PASSWORD = '', CHECK_POLICY = OFF, DEFAULT_DATABASE = [tinytdstest];
+IF NOT EXISTS (select name from sys.server_principals where name like 'tinytds')
+BEGIN
+  CREATE LOGIN [tinytds] WITH PASSWORD = '', CHECK_POLICY = OFF, DEFAULT_DATABASE = [tinytdstest];
+END
 GO
 
 IF EXISTS (select name from sys.server_principals where name like 'tinytds')
@@ -17,8 +20,11 @@ END
 GO
 
 USE [tinytdstest];
-CREATE USER [tinytds] FOR LOGIN [tinytds];
-EXEC sp_addrolemember N'db_owner', N'tinytds';
+IF NOT EXISTS (select name from sys.database_principals where name LIKE 'tinytds')
+BEGIN
+  CREATE USER [tinytds] FOR LOGIN [tinytds];
+  EXEC sp_addrolemember N'db_owner', N'tinytds';
+END
 GO
 
 IF EXISTS (select name from sys.database_principals where name LIKE 'tinytds')

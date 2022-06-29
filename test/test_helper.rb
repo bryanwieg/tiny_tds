@@ -257,16 +257,24 @@ module TinyTds
       # need to set up the networks manually and set TINYTDS_UNIT_HOST to their mssql container name
       # For anything other than localhost just use the environment config
       toxi_host = ENV['TOXIPROXY_HOST'] || 'localhost'
-      Toxiproxy.host = "http://#{toxi_host}:8474"
+      toxi_api_port = 8474
+      toxi_test_port = 1234
+      Toxiproxy.host = "http://#{toxi_host}:#{toxi_api_port}"
 
-      env_host = ENV['TINYTDS_UNIT_HOST_TEST'] || ENV['TINYTDS_UNIT_HOST'] || 'localhost'
-      host = ['localhost', '127.0.0.1', '0.0.0.0'].include?(env_host) ? 'sqlserver' : env_host
-      port = ENV['TINYTDS_UNIT_PORT'] || 1433
+      toxi_upstream_host = ENV['TINYTDS_UNIT_HOST_TEST'] || ENV['TINYTDS_UNIT_HOST'] || 'localhost'
+      toxi_upstream_port = ENV['TINYTDS_UNIT_PORT'] || 1433
+
+      puts "\n-------------------------"
+      puts "Toxiproxy api listener: #{toxi_host}:#{toxi_api_port}"
+      puts "Toxiproxy unit test listener: #{toxi_host}:#{toxi_test_port}"
+      puts "Toxiproxy upstream sqlserver: #{toxi_upstream_host}:#{toxi_upstream_port}"
+      puts '-------------------------'
+
       Toxiproxy.populate([
         {
           name: "sqlserver_test",
-          listen: "0.0.0.0:1234",
-          upstream: "#{host}:#{port}"
+          listen: "#{toxi_host}:#{toxi_test_port}",
+          upstream: "#{toxi_upstream_host}:#{toxi_upstream_port}"
         }
       ])
     end

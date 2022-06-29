@@ -9,86 +9,57 @@ jobs:
       ruby_version:
         description: 'version tag for the cimg/ruby container'
         type: string
+    
+    machine:
+      image: ubuntu-2004:current
+      resource_class: medium
 
-    docker:
-      # Primary container image where all commands run
-      - image: cimg/ruby:<< parameters.ruby_version >>
-        environment:
-          TESTOPTS: '-v'
-          TINYTDS_UNIT_DATASERVER: sqlserver
-          TINYTDS_UNIT_HOST: sqlserver
-          SA_PASSWORD: super01S3cUr3
-          TOXIPROXY_HOST: toxiproxy
-
-      # Service container image
-      - image: mcr.microsoft.com/mssql/server:2019-latest
-        name: sqlserver
-        environment:
-          ACCEPT_EULA: Y
-          SA_PASSWORD: super01S3cUr3
-
-      # tests based on toxiproxy are broken, last working on
-      # v2.1.4 (2019). This is pinned to the closest older
-      # version until those tests can be fixed
-      - image: ghcr.io/shopify/toxiproxy:2.1.5
-        name: toxiproxy
-
-    working_directory: ~/repo
-
+    # be sure to update the ./setup_cimgruby_dev.sh if changes are made to steps below
     steps:
       - checkout
 
       - run:
+          name: start docker-compose build environment
+          command: | 
+            sudo ./test/bin/set_volume_permissions.sh
+            docker-compose up -d
+            echo "Waiting for containers to start..."
+            sleep 10
+
+      - run:
           name: install sql prereqs
           command: |
-            curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-            curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
-            sudo apt-get update
-            sudo ACCEPT_EULA=Y apt-get -y install mssql-tools unixodbc-dev
+            docker exec cimg_ruby bash -c 'sudo -E ./test/bin/install-mssqltools.sh'
 
       - run:
           name: setup tiny_tds test database
           command: |
-            /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P $SA_PASSWORD -i ./test/sql/db-create.sql
-            /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P $SA_PASSWORD -i ./test/sql/db-login.sql
+            docker exec cimg_ruby bash -c './test/bin/setup_tinytds_db.sh'
 
       - run:
           name: compile openssl library
           command: |
-            sudo ./test/bin/install-openssl.sh
+            docker exec cimg_ruby bash -c 'sudo -E ./test/bin/install-openssl.sh'
 
       - run:
           name: compile freetds library
           command: |
-            sudo ./test/bin/install-freetds.sh
-
-      - restore_cache:
-          name: restore gem cache
-          keys:
-            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
-            - v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-
-            - v1-bundle-<< parameters.ruby_version >>-
+            docker exec cimg_ruby bash -c 'sudo -E ./test/bin/install-freetds.sh'
 
       - run:
           name: bundle install gems
           command: |
-            bundle install
-
-      - save_cache:
-          name: save gem cache
-          paths:
-            - ./vendor/bundle
-          key: v1-bundle-<< parameters.ruby_version >>-{{ .Branch }}-{{ checksum "tiny_tds.gemspec" }}
+            docker exec cimg_ruby bash -c 'bundle install'
 
       - run:
           name: build gem
           command: |
-            bundle exec rake build
+            docker exec cimg_ruby bash -c 'bundle exec rake build'
 
       - run:
           name: test gem
           command: |
-            bundle exec rake test
+             docker exec cimg_ruby bash -c 'bundle exec rake test'
 
   test_windows:
     parameters:
