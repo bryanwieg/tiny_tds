@@ -20,7 +20,7 @@ jobs:
       - run:
           name: start docker-compose build environment
           command: | 
-            ls
+            ls ./test/bin
             ./test/bin/set_volume_permissions.sh
             docker-compose up -d
             echo "Waiting for containers to start..."
